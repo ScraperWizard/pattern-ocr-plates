@@ -77,7 +77,7 @@ export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const loopRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const loopRef = useRef<number | null>(null);
   const isSendingRef = useRef(false);
   const liveReadyRef = useRef(false);
   const livePausedRef = useRef(false);
@@ -111,8 +111,8 @@ export default function Home() {
 
   useEffect(() => {
     return () => {
-      if (loopRef.current) {
-        clearInterval(loopRef.current);
+      if (loopRef.current && typeof window !== "undefined") {
+        window.clearInterval(loopRef.current);
         loopRef.current = null;
       }
 
@@ -196,8 +196,8 @@ export default function Home() {
   };
 
   const startInterval = () => {
-    if (loopRef.current) {
-      clearInterval(loopRef.current);
+    if (loopRef.current && typeof window !== "undefined") {
+      window.clearInterval(loopRef.current);
     }
 
     loopRef.current = window.setInterval(() => {
@@ -328,8 +328,8 @@ export default function Home() {
       return;
     }
 
-    if (loopRef.current) {
-      clearInterval(loopRef.current);
+    if (loopRef.current && typeof window !== "undefined") {
+      window.clearInterval(loopRef.current);
       loopRef.current = null;
     }
 
@@ -339,8 +339,8 @@ export default function Home() {
   };
 
   const stopLiveCamera = () => {
-    if (loopRef.current) {
-      clearInterval(loopRef.current);
+    if (loopRef.current && typeof window !== "undefined") {
+      window.clearInterval(loopRef.current);
       loopRef.current = null;
     }
 

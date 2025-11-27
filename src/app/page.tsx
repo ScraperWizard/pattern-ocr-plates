@@ -479,8 +479,6 @@ export default function Home() {
   const primaryPlate = topResult?.plate?.toUpperCase() ?? null;
   const detectionLabel = scanResult?.vision?.detection?.label ?? topResult?.vehicle?.type ?? "—";
   const visionErrorMessage = !visionAvailable ? scanResult?.visionError ?? "Vision service unavailable." : null;
-  const liveVisionStatus = liveResult?.visionStatus ?? "error";
-  const liveVisionAvailable = liveVisionStatus === "success" && Boolean(liveResult?.vision);
   const liveTopMakeLabels = useMemo(() => {
     if (!liveResult?.vision?.makes) {
       return [];
@@ -494,6 +492,9 @@ export default function Home() {
     return liveResult.vision.models.slice(0, 3).map((item) => item.label);
   }, [liveResult?.vision?.models]);
   const liveColorLabel = liveResult?.vision?.color?.name ?? null;
+  const livePlate = topLivePlate?.plate?.toUpperCase() ?? null;
+  const liveVisionStatus = liveResult?.visionStatus ?? "error";
+  const liveVisionAvailable = liveVisionStatus === "success" && Boolean(liveResult?.vision);
   const liveMakeDisplay = liveTopMakeLabels.join(" · ") || "—";
   const liveModelDisplay = liveTopModelLabels.join(" · ") || "—";
   const liveColorDisplay = liveColorLabel ?? "—";
@@ -555,6 +556,57 @@ export default function Home() {
     return { status: "match", record };
   }, [primaryPlate, visionAvailable, topMakeLabels, topModelLabels, topColorLabel]);
 
+  const liveCompliance = useMemo<ComplianceState>(() => {
+    if (!livePlate) {
+      return { status: "no-plate" };
+    }
+
+    const record = CAR_DB.find((entry) => entry.plate === livePlate);
+
+    if (!liveVisionAvailable) {
+      return record ? { status: "vision-missing", record } : { status: "vision-missing" };
+    }
+
+    if (!record) {
+      return { status: "unknown" };
+    }
+
+    const mismatches: string[] = [];
+    const recordMake = normalizeValue(record.make);
+    const recordModel = normalizeValue(record.model);
+    const recordColor = normalizeValue(record.color);
+
+    const makePredictions = liveTopMakeLabels.map((label) => normalizeValue(label)).filter((value): value is string => Boolean(value));
+    const modelPredictions = liveTopModelLabels.map((label) => normalizeValue(label)).filter((value): value is string => Boolean(value));
+    const detectedColor = normalizeValue(liveColorLabel);
+
+    if (recordMake) {
+      if (makePredictions.length === 0) {
+        mismatches.push(`Expected make "${record.make}" but no make predictions were returned.`);
+      } else if (!makePredictions.includes(recordMake)) {
+        mismatches.push(`Expected make "${record.make}" but predictions were: ${liveTopMakeLabels.join(", ") || "not available"}.`);
+      }
+    }
+
+    if (recordModel) {
+      if (modelPredictions.length === 0) {
+        mismatches.push(`Expected model "${record.model}" but no model predictions were returned.`);
+      } else if (!modelPredictions.includes(recordModel)) {
+        mismatches.push(`Expected model "${record.model}" but predictions were: ${liveTopModelLabels.join(", ") || "not available"}.`);
+      }
+    }
+
+    if (recordColor && detectedColor && recordColor !== detectedColor) {
+      mismatches.push(`Expected color "${record.color}" but detected "${liveColorLabel ?? "Unknown"}".`);
+    }
+
+    if (mismatches.length > 0) {
+      return { status: "mismatch", record, mismatches };
+    }
+
+    return { status: "match", record };
+  }, [livePlate, liveVisionAvailable, liveTopMakeLabels, liveTopModelLabels, liveColorLabel]);
+
   const complianceRecord = compliance.status === "match" || compliance.status === "mismatch" || compliance.status === "vision-missing" ? compliance.record ?? null : null;
 
   const mismatchList = compliance.status === "mismatch" ? compliance.mismatches : [];
@@ -567,6 +619,16 @@ export default function Home() {
   const colorDisplayValue = topColorLabel ?? "—";
 
   const auditClass = complianceRecord?.wanted ? styles.auditWanted : compliance.status === "match" ? styles.auditMatch : compliance.status === "mismatch" ? styles.auditMismatch : styles.auditNeutral;
+
+  const liveComplianceRecord = liveCompliance.status === "match" || liveCompliance.status === "mismatch" || liveCompliance.status === "vision-missing" ? liveCompliance.record ?? null : null;
+  const liveMismatchList = liveCompliance.status === "mismatch" ? liveCompliance.mismatches : [];
+  const liveAuditClass = liveComplianceRecord?.wanted
+    ? styles.auditWanted
+    : liveCompliance.status === "match"
+    ? styles.auditMatch
+    : liveCompliance.status === "mismatch"
+    ? styles.auditMismatch
+    : styles.auditNeutral;
 
   const renderBoxStyle = (box?: PlateBox) => {
     const imageWidth = liveResult?.ocr?.image_width ?? videoSize.width;
@@ -837,6 +899,54 @@ export default function Home() {
                     {liveVisionErrorMessage && <small>{liveVisionErrorMessage}</small>}
                   </div>
                 )}
+
+                <div className={`${styles.auditCard} ${liveAuditClass}`}>
+                  {liveComplianceRecord?.wanted && <p className={styles.wantedNotice}>🚨 This plate is flagged as WANTED. Notify security immediately.</p>}
+                  {liveCompliance.status === "match" && liveComplianceRecord && (
+                    <>
+                      <p>✅ Plate matches local inventory.</p>
+                      <small>
+                        Registered as {liveComplianceRecord.plate} · {liveComplianceRecord.make} {liveComplianceRecord.model} ({liveComplianceRecord.color}).
+                      </small>
+                    </>
+                  )}
+                  {liveCompliance.status === "mismatch" && liveComplianceRecord && (
+                    <>
+                      <p>⚠️ Detected vehicle differs from the expected record.</p>
+                      <small>
+                        Expected {liveComplianceRecord.make} {liveComplianceRecord.model} ({liveComplianceRecord.color}).
+                      </small>
+                      <ul>
+                        {liveMismatchList.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {liveCompliance.status === "vision-missing" && (
+                    <>
+                      <p>ℹ️ Vision AI output unavailable, so we can’t confirm the vehicle details.</p>
+                      {liveComplianceRecord ? (
+                        <small>
+                          Registry entry: {liveComplianceRecord.plate} · {liveComplianceRecord.make} {liveComplianceRecord.model} ({liveComplianceRecord.color}).
+                        </small>
+                      ) : (
+                        <small>No local record for this plate yet.</small>
+                      )}
+                    </>
+                  )}
+                  {liveCompliance.status === "unknown" && (
+                    <>
+                      <p>ℹ️ Plate {livePlate ?? "—"} is not in the local registry.</p>
+                      <small>Review and add it to the JSON DB if this vehicle should be tracked.</small>
+                    </>
+                  )}
+                  {liveCompliance.status === "no-plate" && (
+                    <>
+                      <p>ℹ️ Plate was not confidently decoded. Please retry with a clearer frame.</p>
+                    </>
+                  )}
+                </div>
 
                 <ul className={styles.resultList}>
                   {liveResult.ocr.results.map((item, index) => (

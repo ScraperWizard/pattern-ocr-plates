@@ -307,6 +307,17 @@
   word-break: break-word;
 }
 
+.infoCard {
+  border: 1px dashed rgba(15, 23, 42, 0.25);
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  background: rgba(248, 250, 252, 0.8);
+  color: #1f2937;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
 .liveCard .summaryPlate,
 .liveCard .summaryValue {
   color: #f8fafc;

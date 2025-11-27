@@ -428,12 +428,19 @@ export default function Home() {
     return `${(value * 100).toFixed(1)}%`;
   };
 
+  const visionAvailable = Boolean(scanResult?.vision);
   const primaryMake = scanResult?.vision?.makes?.[0]?.label ?? null;
   const primaryModel = scanResult?.vision?.models?.[0]?.label ?? null;
   const primaryColor = scanResult?.vision?.color?.name ?? null;
   const primaryPlate = topResult?.plate?.toUpperCase() ?? null;
+  const detectionLabel = scanResult?.vision?.detection?.label ?? topResult?.vehicle?.type ?? "—";
 
-  type ComplianceState = { status: "no-plate" } | { status: "unknown" } | { status: "match"; record: CarRecord } | { status: "mismatch"; record: CarRecord; mismatches: string[] };
+  type ComplianceState =
+    | { status: "no-plate" }
+    | { status: "vision-missing"; record?: CarRecord }
+    | { status: "unknown" }
+    | { status: "match"; record: CarRecord }
+    | { status: "mismatch"; record: CarRecord; mismatches: string[] };
 
   const compliance = useMemo<ComplianceState>(() => {
     if (!primaryPlate) {
@@ -441,6 +448,11 @@ export default function Home() {
     }
 
     const record = CAR_DB.find((entry) => entry.plate === primaryPlate);
+
+    if (!visionAvailable) {
+      return record ? { status: "vision-missing", record } : { status: "vision-missing" };
+    }
+
     if (!record) {
       return { status: "unknown" };
     }
@@ -467,9 +479,9 @@ export default function Home() {
     }
 
     return { status: "match", record };
-  }, [primaryPlate, primaryMake, primaryModel, primaryColor]);
+  }, [primaryPlate, primaryMake, primaryModel, primaryColor, visionAvailable]);
 
-  const complianceRecord = compliance.status === "match" || compliance.status === "mismatch" ? compliance.record : null;
+  const complianceRecord = compliance.status === "match" || compliance.status === "mismatch" || compliance.status === "vision-missing" ? compliance.record ?? null : null;
 
   const mismatchList = compliance.status === "mismatch" ? compliance.mismatches : [];
 
@@ -549,7 +561,7 @@ export default function Home() {
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Vehicle type</p>
-                    <p className={styles.summaryValue}>{scanResult.vision.detection.label ?? topResult?.vehicle?.type ?? "—"}</p>
+                    <p className={styles.summaryValue}>{detectionLabel}</p>
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Make</p>
@@ -573,6 +585,12 @@ export default function Home() {
                   </div>
                 </div>
 
+                {!visionAvailable && (
+                  <div className={styles.infoCard}>
+                    <p>Vision AI was skipped (no plate detected yet or service unavailable). Showing OCR data only.</p>
+                  </div>
+                )}
+
                 <div className={`${styles.auditCard} ${auditClass}`}>
                   {complianceRecord?.wanted && <p className={styles.wantedNotice}>🚨 This plate is flagged as WANTED. Notify security immediately.</p>}
                   {compliance.status === "match" && complianceRecord && (
@@ -594,6 +612,18 @@ export default function Home() {
                           <li key={item}>{item}</li>
                         ))}
                       </ul>
+                    </>
+                  )}
+                  {compliance.status === "vision-missing" && (
+                    <>
+                      <p>ℹ️ Vision AI output unavailable, so we can’t confirm the vehicle details.</p>
+                      {complianceRecord ? (
+                        <small>
+                          Registry entry: {complianceRecord.plate} · {complianceRecord.make} {complianceRecord.model} ({complianceRecord.color}).
+                        </small>
+                      ) : (
+                        <small>No local record for this plate yet.</small>
+                      )}
                     </>
                   )}
                   {compliance.status === "unknown" && (

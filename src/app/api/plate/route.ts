@@ -21,24 +21,14 @@ export async function POST(request: NextRequest) {
     const ocrPayload = new FormData();
     ocrPayload.append("upload", new Blob([fileBuffer], { type: contentType }), fileName);
 
-    const visionPayload = new FormData();
-    visionPayload.append("file", new Blob([fileBuffer], { type: contentType }), fileName);
-
-    const [ocrResponse, visionResponse] = await Promise.all([
-      fetch(OCR_API_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Token ${OCR_API_KEY}`,
-        },
-        body: ocrPayload,
-      }),
-      fetch(MODEL_API_URL, {
-        method: "POST",
-        body: visionPayload,
-      }),
-    ]);
-
-    const [ocrData, visionData] = await Promise.all([ocrResponse.json(), visionResponse.json()]);
+    const ocrResponse = await fetch(OCR_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Token ${OCR_API_KEY}`,
+      },
+      body: ocrPayload,
+    });
+    const ocrData = await ocrResponse.json();
 
     if (!ocrResponse.ok) {
       return NextResponse.json(
@@ -50,14 +40,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!visionResponse.ok) {
-      return NextResponse.json(
-        {
-          error: visionData?.detail || "Vision model request failed.",
-          details: visionData,
-        },
-        { status: visionResponse.status }
-      );
+    const hasPlate = Array.isArray(ocrData?.results) && ocrData.results.length > 0;
+    let visionData: unknown = null;
+
+    if (hasPlate) {
+      const visionPayload = new FormData();
+      visionPayload.append("file", new Blob([fileBuffer], { type: contentType }), fileName);
+      try {
+        const visionResponse = await fetch(MODEL_API_URL, {
+          method: "POST",
+          body: visionPayload,
+        });
+        const maybeVision = await visionResponse.json();
+        if (visionResponse.ok) {
+          visionData = maybeVision;
+        } else {
+          console.error("Vision model error", maybeVision);
+        }
+      } catch (visionErr) {
+        console.error("Failed to reach vision model", visionErr);
+      }
     }
 
     return NextResponse.json({ ocr: ocrData, vision: visionData });

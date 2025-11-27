@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const OCR_API_URL = "https://api.platerecognizer.com/v1/plate-reader/";
+const MODEL_API_URL = "http://46.224.1.73:8000/analyze";
 
 export async function POST(request: NextRequest) {
   const ocrKey = process.env.PLATE_RECOGNIZER_API_KEY ?? process.env.CAR_VISION_API_KEY;
-  const visionEndpoint = process.env.CAR_VISION_MODEL_ENDPOINT;
 
   if (!ocrKey) {
     return NextResponse.json({ error: "Server misconfiguration. Missing Plate OCR API key." }, { status: 500 });
-  }
-
-  if (!visionEndpoint) {
-    return NextResponse.json({ error: "Server misconfiguration. Missing CAR_VISION_MODEL_ENDPOINT." }, { status: 500 });
   }
 
   try {
@@ -41,7 +37,7 @@ export async function POST(request: NextRequest) {
         },
         body: ocrPayload,
       }),
-      fetch(visionEndpoint, {
+      fetch(MODEL_API_URL, {
         method: "POST",
         body: visionPayload,
       }),

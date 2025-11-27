@@ -22,10 +22,9 @@ Create a `.env.local` file at the project root:
 
 ```
 PLATE_RECOGNIZER_API_KEY=your_token_here
-CAR_VISION_MODEL_ENDPOINT=http://127.0.0.1:8000/analyze
 ```
 
-> Use the provided OCR token (`8ee0d324189b1f227c25d808d93deafeb874dacb`) or substitute your own. Never commit this file. Point the model endpoint to wherever you run `py-model/server.py`.
+> Use the provided OCR token (`8ee0d324189b1f227c25d808d93deafeb874dacb`) or substitute your own. Never commit this file.
 
 ## Local development
 
@@ -34,7 +33,8 @@ npm install
 npm run dev
 ```
 
-Visit [http://localhost:3000](http://localhost:3000) and try uploading or capturing a plate image. The local JSON database lives in `src/data/carDb.json`; edit it to reflect the plates/make/model/color combos you want to validate against. Each entry accepts `plate`, `make`, `model`, `color`, and an optional `wanted` flag (set to `true` for high-priority hits).
+Visit [http://localhost:3000](http://localhost:3000) and try uploading or capturing a plate image. The local JSON database lives in `src/data/carDb.json`; edit it to reflect the plates/make/model/color combos you want to validate against. Each entry accepts `plate`, `make`, `model`, `color`, and an optional `wanted` flag (set to `true` for high-priority hits).  
+The frontend calls the Python service at `http://46.224.1.73:8000/analyze`, so make sure that server stays online.
 
 ### Python model service
 

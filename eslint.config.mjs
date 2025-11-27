@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "py-model/.venv/**",
+    "py-model/__pycache__/**",
+    "py-model/**/*.pyc",
+    "py-model/**/*.pyo",
+    "py-model/**/*.pyc.js",
+    "py-model/uvicorn.log",
   ]),
 ]);
 

@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const API_URL = "https://api.platerecognizer.com/v1/plate-reader/";
+const OCR_API_URL = "https://api.platerecognizer.com/v1/plate-reader/";
 
 export async function POST(request: NextRequest) {
-  const apiKey = process.env.CAR_VISION_API_KEY ?? process.env.PLATE_RECOGNIZER_API_KEY;
+  const ocrKey = process.env.PLATE_RECOGNIZER_API_KEY ?? process.env.CAR_VISION_API_KEY;
+  const visionEndpoint = process.env.CAR_VISION_MODEL_ENDPOINT;
 
-  if (!apiKey) {
-    return NextResponse.json({ error: "Server misconfiguration. Missing vision API key." }, { status: 500 });
+  if (!ocrKey) {
+    return NextResponse.json({ error: "Server misconfiguration. Missing Plate OCR API key." }, { status: 500 });
+  }
+
+  if (!visionEndpoint) {
+    return NextResponse.json({ error: "Server misconfiguration. Missing CAR_VISION_MODEL_ENDPOINT." }, { status: 500 });
   }
 
   try {
@@ -17,33 +22,56 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Image file is required." }, { status: 400 });
     }
 
-    const payload = new FormData();
-    payload.append("upload", file, (file as File).name || "upload.jpg");
-    payload.append("mmc", "true");
+    const arrayBuffer = await file.arrayBuffer();
+    const fileBuffer = Buffer.from(arrayBuffer);
+    const fileName = (file as File).name || "upload.jpg";
+    const contentType = (file as File).type || "application/octet-stream";
 
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Token ${apiKey}`,
-      },
-      body: payload,
-    });
+    const ocrPayload = new FormData();
+    ocrPayload.append("upload", new Blob([fileBuffer], { type: contentType }), fileName);
 
-    const data = await response.json();
+    const visionPayload = new FormData();
+    visionPayload.append("file", new Blob([fileBuffer], { type: contentType }), fileName);
 
-    if (!response.ok) {
+    const [ocrResponse, visionResponse] = await Promise.all([
+      fetch(OCR_API_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Token ${ocrKey}`,
+        },
+        body: ocrPayload,
+      }),
+      fetch(visionEndpoint, {
+        method: "POST",
+        body: visionPayload,
+      }),
+    ]);
+
+    const [ocrData, visionData] = await Promise.all([ocrResponse.json(), visionResponse.json()]);
+
+    if (!ocrResponse.ok) {
       return NextResponse.json(
         {
-          error: data?.detail || "Vision API request failed.",
-          details: data,
+          error: ocrData?.detail || "Plate OCR request failed.",
+          details: ocrData,
         },
-        { status: response.status }
+        { status: ocrResponse.status }
       );
     }
 
-    return NextResponse.json(data);
+    if (!visionResponse.ok) {
+      return NextResponse.json(
+        {
+          error: visionData?.detail || "Vision model request failed.",
+          details: visionData,
+        },
+        { status: visionResponse.status }
+      );
+    }
+
+    return NextResponse.json({ ocr: ocrData, vision: visionData });
   } catch (error) {
-    console.error("Vision API error", error);
+    console.error("Vision integration error", error);
     return NextResponse.json({ error: "Unexpected server error. Please try again." }, { status: 500 });
   }
 }

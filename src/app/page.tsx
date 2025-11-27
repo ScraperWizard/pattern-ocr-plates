@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
+import carDatabase from "@/data/carDb.json";
 import styles from "./page.module.css";
 
 type PlateBox = {
@@ -60,10 +61,64 @@ type PlateResponse = {
   image_height?: number;
 };
 
+type VisionPrediction = {
+  label: string;
+  confidence: number;
+};
+
+type VisionResponse = {
+  detection: {
+    status: string;
+    confidence: number;
+    label?: string;
+    box?: {
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+    };
+  };
+  color: {
+    name: string;
+    confidence: number;
+  };
+  makes: VisionPrediction[];
+  models: VisionPrediction[];
+};
+
+type ScanResponse = {
+  ocr: PlateResponse;
+  vision: VisionResponse;
+};
+
+type CarRecordRaw = {
+  plate: string;
+  make: string;
+  model: string;
+  color: string;
+  wanted?: boolean | number;
+};
+
+type CarRecord = {
+  plate: string;
+  make: string;
+  model: string;
+  color: string;
+  wanted: boolean;
+};
+
+const CAR_DB: CarRecord[] = (carDatabase as CarRecordRaw[]).map((entry) => ({
+  plate: entry.plate.toUpperCase(),
+  make: entry.make,
+  model: entry.model,
+  color: entry.color,
+  wanted: Boolean(entry.wanted),
+}));
+
 export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [result, setResult] = useState<PlateResponse | null>(null);
+  const [scanResult, setScanResult] = useState<ScanResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -144,7 +199,7 @@ export default function Home() {
 
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
-    setResult(null);
+    setScanResult(null);
     setError(null);
   };
 
@@ -155,7 +210,7 @@ export default function Home() {
 
     setSelectedFile(null);
     setPreviewUrl(null);
-    setResult(null);
+    setScanResult(null);
     setError(null);
   };
 
@@ -179,17 +234,17 @@ export default function Home() {
         body: payload,
       });
 
-      const data = (await response.json()) as PlateResponse;
+      const data = (await response.json()) as { ocr?: PlateResponse; vision?: VisionResponse; error?: string };
 
-      if (!response.ok) {
+      if (!response.ok || !data?.ocr || !data?.vision) {
         throw new Error(data?.error ?? "Unable to process the image. Please try again.");
       }
 
-      setResult(data);
+      setScanResult({ ocr: data.ocr, vision: data.vision });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error. Please try again.";
       setError(message);
-      setResult(null);
+      setScanResult(null);
     } finally {
       setIsLoading(false);
     }
@@ -362,7 +417,7 @@ export default function Home() {
     setLiveError(null);
   };
 
-  const topResult = useMemo(() => result?.results?.[0], [result]);
+  const topResult = useMemo(() => scanResult?.ocr?.results?.[0], [scanResult]);
   const topLivePlate = useMemo(() => liveResult?.results?.[0], [liveResult]);
 
   const formatScore = (value?: number) => {
@@ -373,32 +428,52 @@ export default function Home() {
     return `${(value * 100).toFixed(1)}%`;
   };
 
-  const describeModel = (item?: PlateResult) => {
-    const model = item?.model_make?.[0];
-    if (!model) {
-      return "—";
+  const primaryMake = scanResult?.vision?.makes?.[0]?.label ?? null;
+  const primaryModel = scanResult?.vision?.models?.[0]?.label ?? null;
+  const primaryColor = scanResult?.vision?.color?.name ?? null;
+  const primaryPlate = topResult?.plate?.toUpperCase() ?? null;
+
+  type ComplianceState = { status: "no-plate" } | { status: "unknown" } | { status: "match"; record: CarRecord } | { status: "mismatch"; record: CarRecord; mismatches: string[] };
+
+  const compliance = useMemo<ComplianceState>(() => {
+    if (!primaryPlate) {
+      return { status: "no-plate" };
     }
 
-    return `${model.make ?? ""} ${model.model ?? ""}`.trim() || "—";
-  };
-
-  const describeColor = (item?: PlateResult) => {
-    const color = item?.color?.[0]?.color;
-    if (!color) {
-      return "—";
+    const record = CAR_DB.find((entry) => entry.plate === primaryPlate);
+    if (!record) {
+      return { status: "unknown" };
     }
 
-    return color.charAt(0).toUpperCase() + color.slice(1);
-  };
+    const normalize = (value?: string | null) => value?.trim().toLowerCase() ?? null;
+    const mismatches: string[] = [];
 
-  const describeOrientation = (item?: PlateResult) => {
-    const orientation = item?.orientation?.[0]?.orientation;
-    if (!orientation) {
-      return "—";
+    const detectedMake = normalize(primaryMake);
+    const detectedModel = normalize(primaryModel);
+    const detectedColor = normalize(primaryColor);
+
+    if (detectedMake && normalize(record.make) !== detectedMake) {
+      mismatches.push(`Expected make "${record.make}" but detected "${primaryMake}".`);
+    }
+    if (detectedModel && normalize(record.model) !== detectedModel) {
+      mismatches.push(`Expected model "${record.model}" but detected "${primaryModel}".`);
+    }
+    if (detectedColor && normalize(record.color) !== detectedColor) {
+      mismatches.push(`Expected color "${record.color}" but detected "${primaryColor}".`);
     }
 
-    return orientation;
-  };
+    if (mismatches.length > 0) {
+      return { status: "mismatch", record, mismatches };
+    }
+
+    return { status: "match", record };
+  }, [primaryPlate, primaryMake, primaryModel, primaryColor]);
+
+  const complianceRecord = compliance.status === "match" || compliance.status === "mismatch" ? compliance.record : null;
+
+  const mismatchList = compliance.status === "mismatch" ? compliance.mismatches : [];
+
+  const auditClass = complianceRecord?.wanted ? styles.auditWanted : compliance.status === "match" ? styles.auditMatch : compliance.status === "mismatch" ? styles.auditMismatch : styles.auditNeutral;
 
   const renderBoxStyle = (box?: PlateBox) => {
     const imageWidth = liveResult?.image_width ?? videoSize.width;
@@ -463,9 +538,9 @@ export default function Home() {
 
             {isLoading && <p className={styles.status}>Analyzing snapshot…</p>}
 
-            {!isLoading && !error && !result && <p className={styles.helper}>Your scan results will show up here.</p>}
+            {!isLoading && !error && !scanResult && <p className={styles.helper}>Your scan results will show up here.</p>}
 
-            {result?.results && result.results.length > 0 && (
+            {scanResult?.ocr?.results && scanResult.ocr.results.length > 0 && (
               <>
                 <div className={styles.summary}>
                   <div>
@@ -474,15 +549,19 @@ export default function Home() {
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Vehicle type</p>
-                    <p className={styles.summaryValue}>{topResult?.vehicle?.type ?? "—"}</p>
+                    <p className={styles.summaryValue}>{scanResult.vision.detection.label ?? topResult?.vehicle?.type ?? "—"}</p>
                   </div>
                   <div>
-                    <p className={styles.summaryLabel}>Make & model</p>
-                    <p className={styles.summaryValue}>{describeModel(topResult)}</p>
+                    <p className={styles.summaryLabel}>Make</p>
+                    <p className={styles.summaryValue}>{primaryMake ?? "—"}</p>
+                  </div>
+                  <div>
+                    <p className={styles.summaryLabel}>Model</p>
+                    <p className={styles.summaryValue}>{primaryModel ?? "—"}</p>
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Color</p>
-                    <p className={styles.summaryValue}>{describeColor(topResult)}</p>
+                    <p className={styles.summaryValue}>{primaryColor ?? "—"}</p>
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Confidence</p>
@@ -490,22 +569,55 @@ export default function Home() {
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Processing</p>
-                    <p className={styles.summaryValue}>{result.processing_time ? `${result.processing_time.toFixed(0)} ms` : "—"}</p>
+                    <p className={styles.summaryValue}>{scanResult.ocr.processing_time ? `${scanResult.ocr.processing_time.toFixed(0)} ms` : "—"}</p>
                   </div>
                 </div>
 
+                <div className={`${styles.auditCard} ${auditClass}`}>
+                  {complianceRecord?.wanted && <p className={styles.wantedNotice}>🚨 This plate is flagged as WANTED. Notify security immediately.</p>}
+                  {compliance.status === "match" && complianceRecord && (
+                    <>
+                      <p>✅ Plate matches local inventory.</p>
+                      <small>
+                        Registered as {complianceRecord.plate} · {complianceRecord.make} {complianceRecord.model} ({complianceRecord.color}).
+                      </small>
+                    </>
+                  )}
+                  {compliance.status === "mismatch" && complianceRecord && (
+                    <>
+                      <p>⚠️ Detected vehicle differs from the expected record.</p>
+                      <small>
+                        Expected {complianceRecord.make} {complianceRecord.model} ({complianceRecord.color}).
+                      </small>
+                      <ul>
+                        {mismatchList.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {compliance.status === "unknown" && (
+                    <>
+                      <p>ℹ️ Plate {primaryPlate} is not in the local registry.</p>
+                      <small>Review and add it to the JSON DB if this vehicle should be tracked.</small>
+                    </>
+                  )}
+                  {compliance.status === "no-plate" && (
+                    <>
+                      <p>ℹ️ Plate was not confidently decoded. Please retry with a clearer image.</p>
+                    </>
+                  )}
+                </div>
+
                 <ul className={styles.resultList}>
-                  {result.results.map((item, index) => (
+                  {scanResult.ocr.results.map((item, index) => (
                     <li key={`${item.plate}-${index}`} className={styles.resultItem}>
                       <div>
                         <p className={styles.plate}>{item.plate?.toUpperCase() ?? "Unknown"}</p>
                         <p className={styles.meta}>
                           {formatScore(item.score)} match · {item.region?.code?.toUpperCase() ?? "Region N/A"}
                         </p>
-                        <p className={styles.meta}>
-                          Vehicle: {item.vehicle?.type ?? "Unknown"} · Color: {describeColor(item)} · Orientation: {describeOrientation(item)}
-                        </p>
-                        <p className={styles.meta}>Make &amp; model: {describeModel(item)}</p>
+                        <p className={styles.meta}>Vehicle: {item.vehicle?.type ?? "Unknown"}</p>
                       </div>
 
                       {item.candidates && item.candidates.length > 1 && (
@@ -581,14 +693,6 @@ export default function Home() {
                     <p className={styles.summaryValue}>{topLivePlate?.vehicle?.type ?? "—"}</p>
                   </div>
                   <div>
-                    <p className={styles.summaryLabel}>Make & model</p>
-                    <p className={styles.summaryValue}>{describeModel(topLivePlate)}</p>
-                  </div>
-                  <div>
-                    <p className={styles.summaryLabel}>Color</p>
-                    <p className={styles.summaryValue}>{describeColor(topLivePlate)}</p>
-                  </div>
-                  <div>
                     <p className={styles.summaryLabel}>Confidence</p>
                     <p className={styles.summaryValue}>{formatScore(topLivePlate?.score)}</p>
                   </div>
@@ -606,10 +710,7 @@ export default function Home() {
                         <p className={styles.meta}>
                           {formatScore(item.score)} match · {item.region?.code?.toUpperCase() ?? "Region N/A"}
                         </p>
-                        <p className={styles.meta}>
-                          Vehicle: {item.vehicle?.type ?? "Unknown"} · Color: {describeColor(item)} · Orientation: {describeOrientation(item)}
-                        </p>
-                        <p className={styles.meta}>Make &amp; model: {describeModel(item)}</p>
+                        <p className={styles.meta}>Vehicle: {item.vehicle?.type ?? "Unknown"}</p>
                         {item.box && (
                           <p className={styles.meta}>
                             Box: x[{item.box.xmin} - {item.box.xmax}] · y[{item.box.ymin} - {item.box.ymax}]

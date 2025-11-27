@@ -8,21 +8,24 @@ Mobile-first Next.js app that lets you capture or upload a vehicle photo from yo
 - Live camera streaming at 1 fps with start/pause controls, bounding-box overlay, and status text.
 - Secure API Route proxy so your vision token never leaves the server.
 - Vehicle insights including type, make/model, color, and orientation plus alternate plate candidates.
+- Local JSON registry that flags unknown or mismatched vehicles (plate ↔ make/model/color).
 
 ## Prerequisites
 
 - Node.js 18.18+ (Next.js requirement).
-- Cloud vision API token (the provided sample token works too).
+- Cloud vision/OCR API token (the provided sample token works too).
+- Python vision service running from `py-model/server.py` (FastAPI).
 
 ## Environment variables
 
 Create a `.env.local` file at the project root:
 
 ```
-CAR_VISION_API_KEY=your_token_here
+PLATE_RECOGNIZER_API_KEY=your_token_here
+CAR_VISION_MODEL_ENDPOINT=http://127.0.0.1:8000/analyze
 ```
 
-> Drop in the provided token (`8ee0d324189b1f227c25d808d93deafeb874dacb`) or substitute your own. Never commit this file.
+> Use the provided OCR token (`8ee0d324189b1f227c25d808d93deafeb874dacb`) or substitute your own. Never commit this file. Point the model endpoint to wherever you run `py-model/server.py`.
 
 ## Local development
 
@@ -31,7 +34,18 @@ npm install
 npm run dev
 ```
 
-Visit [http://localhost:3000](http://localhost:3000) and try uploading or capturing a plate image.
+Visit [http://localhost:3000](http://localhost:3000) and try uploading or capturing a plate image. The local JSON database lives in `src/data/carDb.json`; edit it to reflect the plates/make/model/color combos you want to validate against. Each entry accepts `plate`, `make`, `model`, `color`, and an optional `wanted` flag (set to `true` for high-priority hits).
+
+### Python model service
+
+```
+cd py-model
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+CAR_MODEL_WEIGHTS=/absolute/path/to/compcars_best_model.pth .venv/bin/uvicorn server:app --host 0.0.0.0 --port 8000
+```
+
+The Next.js API route sends each upload to both Plate Recognizer (for OCR) and this FastAPI service (for make/model/color). The UI cross-checks those predictions against the JSON registry and flags mismatches.
 
 ## Live camera controls
 

@@ -33,6 +33,10 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 py-model/compcars_best_model.pth
+py-model/.venv/
+py-model/uvicorn.log
+py-model/__pycache__/
+py-model/*.pyc
 
 # vercel
 .vercel

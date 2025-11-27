@@ -1,0 +1,44 @@
+[
+    {
+        "plate": "z89925",
+        "make": "KIA",
+        "model": "KIA Optima",
+        "color": "Black",
+        "wanted": 1
+    },
+    {
+        "plate": "dd14904",
+        "make": "Nissan",
+        "model": "Sunny",
+        "color": "Red",
+        "wanted": 0
+    },
+    {
+        "plate": "g94289",
+        "make": "Ford",
+        "model": "Edge",
+        "color": "Black",
+        "wanted": 0
+    },
+    {
+        "plate": "1715976",
+        "make": "Dodge",
+        "model": "Durango",
+        "color": "White",
+        "wanted": 0
+    },
+    {
+        "plate": "t14810",
+        "make": "Lexus",
+        "model": "IS",
+        "color": "Blue",
+        "wanted": 0
+    },
+    {
+        "plate": "w32915",
+        "make": "Toyota",
+        "model": "Corolla",
+        "color": "White",
+        "wanted": 0
+    }
+]

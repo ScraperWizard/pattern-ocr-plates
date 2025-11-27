@@ -100,11 +100,11 @@ class VisionService:
         self.vehicle_classes = {2: "car", 5: "bus", 7: "truck"}
 
     def _load_classifier(self) -> CarClassifier:
-        weights_path = Path(os.environ.get("CAR_MODEL_WEIGHTS", DEFAULT_WEIGHTS_PATH))
+        weights_path = DEFAULT_WEIGHTS_PATH
         if not weights_path.exists():
             raise RuntimeError(
-                "Classifier weights not found. "
-                "Set the CAR_MODEL_WEIGHTS environment variable to the .pth file for your model."
+                f"Classifier weights not found at {weights_path}. "
+                "Ensure 'compcars_best_model.pth' is present inside py-model/."
             )
         classifier = CarClassifier(len(MAKE_NAMES), len(MODEL_NAMES)).to(self.device)
         state_dict = torch.load(weights_path, map_location=self.device)

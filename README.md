@@ -42,10 +42,10 @@ Visit [http://localhost:3000](http://localhost:3000) and try uploading or captur
 cd py-model
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-CAR_MODEL_WEIGHTS=/absolute/path/to/compcars_best_model.pth .venv/bin/uvicorn server:app --host 0.0.0.0 --port 8000
+.venv/bin/uvicorn server:app --host 0.0.0.0 --port 8000
 ```
 
-The Next.js API route sends each upload to both Plate Recognizer (for OCR) and this FastAPI service (for make/model/color). The UI cross-checks those predictions against the JSON registry and flags mismatches.
+The weights file (`py-model/compcars_best_model.pth`) is included in the repo, so no extra configuration is needed. The Next.js API route sends each upload to both Plate Recognizer (for OCR) and this FastAPI service (for make/model/color). The UI cross-checks those predictions against the JSON registry and flags mismatches.
 
 ## Live camera controls
 

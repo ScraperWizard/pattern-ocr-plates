@@ -86,9 +86,13 @@ type VisionResponse = {
   models: VisionPrediction[];
 };
 
+type VisionStatus = "success" | "error";
+
 type ScanResponse = {
   ocr: PlateResponse;
   vision: VisionResponse | null;
+  visionStatus: VisionStatus;
+  visionError: string | null;
 };
 
 type CarRecordRaw = {
@@ -234,13 +238,24 @@ export default function Home() {
         body: payload,
       });
 
-      const data = (await response.json()) as { ocr?: PlateResponse; vision?: VisionResponse | null; error?: string };
+      const data = (await response.json()) as {
+        ocr?: PlateResponse;
+        vision?: VisionResponse | null;
+        visionStatus?: VisionStatus;
+        visionError?: string | null;
+        error?: string;
+      };
 
       if (!response.ok || !data?.ocr) {
         throw new Error(data?.error ?? "Unable to process the image. Please try again.");
       }
 
-      setScanResult({ ocr: data.ocr, vision: data.vision ?? null });
+      setScanResult({
+        ocr: data.ocr,
+        vision: data.vision ?? null,
+        visionStatus: data.visionStatus ?? (data.vision ? "success" : "error"),
+        visionError: data.visionError ?? (data.vision ? null : "Vision service response missing."),
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error. Please try again.";
       setError(message);
@@ -303,13 +318,17 @@ export default function Home() {
         body: payload,
       });
 
-      const data = (await response.json()) as PlateResponse;
+      const data = (await response.json()) as {
+        ocr?: PlateResponse;
+        vision?: VisionResponse | null;
+        error?: string;
+      };
 
-      if (!response.ok) {
+      if (!response.ok || !data?.ocr) {
         throw new Error(data?.error ?? "Live scan failed.");
       }
 
-      setLiveResult(data);
+      setLiveResult(data.ocr);
       setLiveError(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Live scan failed.";
@@ -428,12 +447,14 @@ export default function Home() {
     return `${(value * 100).toFixed(1)}%`;
   };
 
-  const visionAvailable = Boolean(scanResult?.vision);
+  const visionStatus = scanResult?.visionStatus ?? "error";
+  const visionAvailable = visionStatus === "success" && Boolean(scanResult?.vision);
   const primaryMake = scanResult?.vision?.makes?.[0]?.label ?? null;
   const primaryModel = scanResult?.vision?.models?.[0]?.label ?? null;
   const primaryColor = scanResult?.vision?.color?.name ?? null;
   const primaryPlate = topResult?.plate?.toUpperCase() ?? null;
   const detectionLabel = scanResult?.vision?.detection?.label ?? topResult?.vehicle?.type ?? "—";
+  const visionErrorMessage = !visionAvailable ? scanResult?.visionError ?? "Vision service unavailable." : null;
 
   type ComplianceState =
     | { status: "no-plate" }
@@ -548,7 +569,12 @@ export default function Home() {
           <section className={styles.results} aria-live="polite">
             {error && <p className={styles.error}>{error}</p>}
 
-            {isLoading && <p className={styles.status}>Analyzing snapshot…</p>}
+            {isLoading && (
+              <div className={styles.loadingCard}>
+                <span className={styles.loadingSpinner} aria-hidden="true" />
+                <p>Running OCR and vehicle intelligence…</p>
+              </div>
+            )}
 
             {!isLoading && !error && !scanResult && <p className={styles.helper}>Your scan results will show up here.</p>}
 
@@ -587,7 +613,8 @@ export default function Home() {
 
                 {!visionAvailable && (
                   <div className={styles.infoCard}>
-                    <p>Vision AI was skipped (no plate detected yet or service unavailable). Showing OCR data only.</p>
+                    <p>Vision AI unavailable. Showing OCR data only.</p>
+                    {visionErrorMessage && <small>{visionErrorMessage}</small>}
                   </div>
                 )}
 

@@ -40,29 +40,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const hasPlate = Array.isArray(ocrData?.results) && ocrData.results.length > 0;
-    let visionData: unknown = null;
+    const visionPayload = new FormData();
+    visionPayload.append("file", new Blob([fileBuffer], { type: contentType }), fileName);
 
-    if (hasPlate) {
-      const visionPayload = new FormData();
-      visionPayload.append("file", new Blob([fileBuffer], { type: contentType }), fileName);
-      try {
-        const visionResponse = await fetch(MODEL_API_URL, {
-          method: "POST",
-          body: visionPayload,
-        });
-        const maybeVision = await visionResponse.json();
-        if (visionResponse.ok) {
-          visionData = maybeVision;
-        } else {
-          console.error("Vision model error", maybeVision);
-        }
-      } catch (visionErr) {
-        console.error("Failed to reach vision model", visionErr);
+    let visionData: unknown = null;
+    let visionStatus: "success" | "error" = "error";
+    let visionError: string | null = "Vision model request was skipped.";
+
+    try {
+      const visionResponse = await fetch(MODEL_API_URL, {
+        method: "POST",
+        body: visionPayload,
+      });
+      const maybeVision = await visionResponse.json();
+      if (visionResponse.ok) {
+        visionData = maybeVision;
+        visionStatus = "success";
+        visionError = null;
+      } else {
+        visionStatus = "error";
+        visionError = (maybeVision as { detail?: string })?.detail ?? "Vision model request failed.";
+        console.error("Vision model error", maybeVision);
       }
+    } catch (visionErr) {
+      visionStatus = "error";
+      visionError = visionErr instanceof Error ? visionErr.message : "Vision model unreachable.";
+      console.error("Failed to reach vision model", visionErr);
     }
 
-    return NextResponse.json({ ocr: ocrData, vision: visionData });
+    return NextResponse.json({ ocr: ocrData, vision: visionData, visionStatus, visionError });
   } catch (error) {
     console.error("Vision integration error", error);
     return NextResponse.json({ error: "Unexpected server error. Please try again." }, { status: 500 });

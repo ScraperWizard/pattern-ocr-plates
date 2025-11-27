@@ -93,6 +93,7 @@ type ScanResponse = {
   vision: VisionResponse | null;
   visionStatus: VisionStatus;
   visionError: string | null;
+  visionDebug?: Record<string, unknown> | null;
 };
 
 type CarRecordRaw = {
@@ -119,6 +120,8 @@ const CAR_DB: CarRecord[] = (carDatabase as CarRecordRaw[]).map((entry) => ({
   wanted: Boolean(entry.wanted),
 }));
 
+const normalizeValue = (value?: string | null) => value?.trim().toLowerCase() ?? null;
+
 export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -126,7 +129,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [liveResult, setLiveResult] = useState<PlateResponse | null>(null);
+  const [liveResult, setLiveResult] = useState<ScanResponse | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [isLiveReady, setIsLiveReady] = useState(false);
   const [isLivePaused, setIsLivePaused] = useState(false);
@@ -243,6 +246,7 @@ export default function Home() {
         vision?: VisionResponse | null;
         visionStatus?: VisionStatus;
         visionError?: string | null;
+        visionDebug?: Record<string, unknown> | null;
         error?: string;
       };
 
@@ -255,6 +259,7 @@ export default function Home() {
         vision: data.vision ?? null,
         visionStatus: data.visionStatus ?? (data.vision ? "success" : "error"),
         visionError: data.visionError ?? (data.vision ? null : "Vision service response missing."),
+        visionDebug: data.visionDebug ?? null,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error. Please try again.";
@@ -321,6 +326,9 @@ export default function Home() {
       const data = (await response.json()) as {
         ocr?: PlateResponse;
         vision?: VisionResponse | null;
+        visionStatus?: VisionStatus;
+        visionError?: string | null;
+        visionDebug?: Record<string, unknown> | null;
         error?: string;
       };
 
@@ -328,7 +336,13 @@ export default function Home() {
         throw new Error(data?.error ?? "Live scan failed.");
       }
 
-      setLiveResult(data.ocr);
+      setLiveResult({
+        ocr: data.ocr,
+        vision: data.vision ?? null,
+        visionStatus: data.visionStatus ?? (data.vision ? "success" : "error"),
+        visionError: data.visionError ?? (data.vision ? null : "Vision service response missing."),
+        visionDebug: data.visionDebug ?? null,
+      });
       setLiveError(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Live scan failed.";
@@ -437,7 +451,7 @@ export default function Home() {
   };
 
   const topResult = useMemo(() => scanResult?.ocr?.results?.[0], [scanResult]);
-  const topLivePlate = useMemo(() => liveResult?.results?.[0], [liveResult]);
+  const topLivePlate = useMemo(() => liveResult?.ocr?.results?.[0], [liveResult]);
 
   const formatScore = (value?: number) => {
     if (typeof value !== "number") {
@@ -449,12 +463,41 @@ export default function Home() {
 
   const visionStatus = scanResult?.visionStatus ?? "error";
   const visionAvailable = visionStatus === "success" && Boolean(scanResult?.vision);
-  const primaryMake = scanResult?.vision?.makes?.[0]?.label ?? null;
-  const primaryModel = scanResult?.vision?.models?.[0]?.label ?? null;
-  const primaryColor = scanResult?.vision?.color?.name ?? null;
+  const topMakeLabels = useMemo(() => {
+    if (!scanResult?.vision?.makes) {
+      return [];
+    }
+    return scanResult.vision.makes.slice(0, 3).map((item) => item.label);
+  }, [scanResult?.vision?.makes]);
+  const topModelLabels = useMemo(() => {
+    if (!scanResult?.vision?.models) {
+      return [];
+    }
+    return scanResult.vision.models.slice(0, 3).map((item) => item.label);
+  }, [scanResult?.vision?.models]);
+  const topColorLabel = scanResult?.vision?.color?.name ?? null;
   const primaryPlate = topResult?.plate?.toUpperCase() ?? null;
   const detectionLabel = scanResult?.vision?.detection?.label ?? topResult?.vehicle?.type ?? "—";
   const visionErrorMessage = !visionAvailable ? scanResult?.visionError ?? "Vision service unavailable." : null;
+  const liveVisionStatus = liveResult?.visionStatus ?? "error";
+  const liveVisionAvailable = liveVisionStatus === "success" && Boolean(liveResult?.vision);
+  const liveTopMakeLabels = useMemo(() => {
+    if (!liveResult?.vision?.makes) {
+      return [];
+    }
+    return liveResult.vision.makes.slice(0, 3).map((item) => item.label);
+  }, [liveResult?.vision?.makes]);
+  const liveTopModelLabels = useMemo(() => {
+    if (!liveResult?.vision?.models) {
+      return [];
+    }
+    return liveResult.vision.models.slice(0, 3).map((item) => item.label);
+  }, [liveResult?.vision?.models]);
+  const liveColorLabel = liveResult?.vision?.color?.name ?? null;
+  const liveMakeDisplay = liveTopMakeLabels.join(" · ") || "—";
+  const liveModelDisplay = liveTopModelLabels.join(" · ") || "—";
+  const liveColorDisplay = liveColorLabel ?? "—";
+  const liveVisionErrorMessage = !liveVisionAvailable ? liveResult?.visionError ?? "Vision service unavailable." : null;
 
   type ComplianceState =
     | { status: "no-plate" }
@@ -478,21 +521,31 @@ export default function Home() {
       return { status: "unknown" };
     }
 
-    const normalize = (value?: string | null) => value?.trim().toLowerCase() ?? null;
     const mismatches: string[] = [];
+    const recordMake = normalizeValue(record.make);
+    const recordModel = normalizeValue(record.model);
+    const recordColor = normalizeValue(record.color);
 
-    const detectedMake = normalize(primaryMake);
-    const detectedModel = normalize(primaryModel);
-    const detectedColor = normalize(primaryColor);
+    const makePredictions = topMakeLabels.map((label) => normalizeValue(label)).filter((value): value is string => Boolean(value));
+    const modelPredictions = topModelLabels.map((label) => normalizeValue(label)).filter((value): value is string => Boolean(value));
+    const detectedColor = normalizeValue(topColorLabel);
 
-    if (detectedMake && normalize(record.make) !== detectedMake) {
-      mismatches.push(`Expected make "${record.make}" but detected "${primaryMake}".`);
+    if (recordMake) {
+      if (makePredictions.length === 0) {
+        mismatches.push(`Expected make "${record.make}" but no make predictions were returned.`);
+      } else if (!makePredictions.includes(recordMake)) {
+        mismatches.push(`Expected make "${record.make}" but predictions were: ${topMakeLabels.join(", ") || "not available"}.`);
+      }
     }
-    if (detectedModel && normalize(record.model) !== detectedModel) {
-      mismatches.push(`Expected model "${record.model}" but detected "${primaryModel}".`);
+    if (recordModel) {
+      if (modelPredictions.length === 0) {
+        mismatches.push(`Expected model "${record.model}" but no model predictions were returned.`);
+      } else if (!modelPredictions.includes(recordModel)) {
+        mismatches.push(`Expected model "${record.model}" but predictions were: ${topModelLabels.join(", ") || "not available"}.`);
+      }
     }
-    if (detectedColor && normalize(record.color) !== detectedColor) {
-      mismatches.push(`Expected color "${record.color}" but detected "${primaryColor}".`);
+    if (recordColor && detectedColor && recordColor !== detectedColor) {
+      mismatches.push(`Expected color "${record.color}" but detected "${topColorLabel ?? "Unknown"}".`);
     }
 
     if (mismatches.length > 0) {
@@ -500,17 +553,24 @@ export default function Home() {
     }
 
     return { status: "match", record };
-  }, [primaryPlate, primaryMake, primaryModel, primaryColor, visionAvailable]);
+  }, [primaryPlate, visionAvailable, topMakeLabels, topModelLabels, topColorLabel]);
 
   const complianceRecord = compliance.status === "match" || compliance.status === "mismatch" || compliance.status === "vision-missing" ? compliance.record ?? null : null;
 
   const mismatchList = compliance.status === "mismatch" ? compliance.mismatches : [];
 
+  const makeMatchLabel = complianceRecord && topMakeLabels.length > 0 ? topMakeLabels.find((label) => normalizeValue(label) === normalizeValue(complianceRecord.make)) ?? null : null;
+  const modelMatchLabel = complianceRecord && topModelLabels.length > 0 ? topModelLabels.find((label) => normalizeValue(label) === normalizeValue(complianceRecord.model)) ?? null : null;
+
+  const makeDisplayValue = complianceRecord && makeMatchLabel ? complianceRecord.make : topMakeLabels.join(" · ") || "—";
+  const modelDisplayValue = complianceRecord && modelMatchLabel ? complianceRecord.model : topModelLabels.join(" · ") || "—";
+  const colorDisplayValue = topColorLabel ?? "—";
+
   const auditClass = complianceRecord?.wanted ? styles.auditWanted : compliance.status === "match" ? styles.auditMatch : compliance.status === "mismatch" ? styles.auditMismatch : styles.auditNeutral;
 
   const renderBoxStyle = (box?: PlateBox) => {
-    const imageWidth = liveResult?.image_width ?? videoSize.width;
-    const imageHeight = liveResult?.image_height ?? videoSize.height;
+    const imageWidth = liveResult?.ocr?.image_width ?? videoSize.width;
+    const imageHeight = liveResult?.ocr?.image_height ?? videoSize.height;
 
     if (!box || !imageWidth || !imageHeight) {
       return undefined;
@@ -591,15 +651,15 @@ export default function Home() {
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Make</p>
-                    <p className={styles.summaryValue}>{primaryMake ?? "—"}</p>
+                    <p className={styles.summaryValue}>{makeDisplayValue}</p>
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Model</p>
-                    <p className={styles.summaryValue}>{primaryModel ?? "—"}</p>
+                    <p className={styles.summaryValue}>{modelDisplayValue}</p>
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Color</p>
-                    <p className={styles.summaryValue}>{primaryColor ?? "—"}</p>
+                    <p className={styles.summaryValue}>{colorDisplayValue}</p>
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Confidence</p>
@@ -712,7 +772,7 @@ export default function Home() {
             <div className={styles.videoFrame}>
               <video ref={videoRef} className={styles.video} muted playsInline autoPlay aria-label="Live camera preview" />
               <div className={styles.overlay}>
-                {liveResult?.results?.map((item, index) => (
+                {liveResult?.ocr?.results?.map((item, index) => (
                   <div key={`${item.plate}-${index}`} className={styles.box} style={renderBoxStyle(item.box)}>
                     <span className={styles.boxLabel}>{item.plate?.toUpperCase()}</span>
                   </div>
@@ -738,7 +798,7 @@ export default function Home() {
           <section className={styles.results} aria-live="polite">
             {!liveResult && !liveError && <p className={styles.helper}>Start the camera to see rolling results.</p>}
 
-            {liveResult?.results && liveResult.results.length > 0 && (
+            {liveResult?.ocr?.results && liveResult.ocr.results.length > 0 && (
               <>
                 <div className={styles.summary}>
                   <div>
@@ -750,17 +810,36 @@ export default function Home() {
                     <p className={styles.summaryValue}>{topLivePlate?.vehicle?.type ?? "—"}</p>
                   </div>
                   <div>
+                    <p className={styles.summaryLabel}>Make</p>
+                    <p className={styles.summaryValue}>{liveMakeDisplay}</p>
+                  </div>
+                  <div>
+                    <p className={styles.summaryLabel}>Model</p>
+                    <p className={styles.summaryValue}>{liveModelDisplay}</p>
+                  </div>
+                  <div>
+                    <p className={styles.summaryLabel}>Color</p>
+                    <p className={styles.summaryValue}>{liveColorDisplay}</p>
+                  </div>
+                  <div>
                     <p className={styles.summaryLabel}>Confidence</p>
                     <p className={styles.summaryValue}>{formatScore(topLivePlate?.score)}</p>
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Processing</p>
-                    <p className={styles.summaryValue}>{liveResult.processing_time ? `${liveResult.processing_time.toFixed(0)} ms` : "—"}</p>
+                    <p className={styles.summaryValue}>{liveResult.ocr.processing_time ? `${liveResult.ocr.processing_time.toFixed(0)} ms` : "—"}</p>
                   </div>
                 </div>
 
+                {!liveVisionAvailable && (
+                  <div className={styles.infoCard}>
+                    <p>Vision AI unavailable for this frame. Showing OCR-only data.</p>
+                    {liveVisionErrorMessage && <small>{liveVisionErrorMessage}</small>}
+                  </div>
+                )}
+
                 <ul className={styles.resultList}>
-                  {liveResult.results.map((item, index) => (
+                  {liveResult.ocr.results.map((item, index) => (
                     <li key={`${item.plate}-${index}`} className={styles.resultItem}>
                       <div>
                         <p className={styles.plate}>{item.plate?.toUpperCase() ?? "Unknown"}</p>

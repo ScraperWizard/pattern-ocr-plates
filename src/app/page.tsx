@@ -655,7 +655,7 @@ export default function Home() {
   return (
     <div className={styles.page}>
       <main className={styles.grid}>
-        <section className={styles.card}>
+        <section className={`${styles.card} ${styles.snapshotCard}`}>
           <header className={styles.header}>
             <p className={styles.tag}>Snapshot upload</p>
             <h1>Upload a still frame and decode it instantly</h1>
@@ -948,8 +948,8 @@ export default function Home() {
                   )}
                 </div>
 
-                <ul className={styles.resultList}>
-                  {liveResult.ocr.results.map((item, index) => (
+                <ul className={`${styles.resultList} ${styles.liveResultList}`}>
+                  {liveResult.ocr.results.slice(0, 1).map((item, index) => (
                     <li key={`${item.plate}-${index}`} className={styles.resultItem}>
                       <div>
                         <p className={styles.plate}>{item.plate?.toUpperCase() ?? "Unknown"}</p>

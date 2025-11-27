@@ -36,6 +36,12 @@
   border: 1px solid rgba(148, 163, 184, 0.25);
 }
 
+.snapshotCard {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
 .header {
   display: flex;
   flex-direction: column;
@@ -368,6 +374,10 @@
   margin: 0;
 }
 
+.liveResultList {
+  /* additional responsive rules applied via media query */
+}
+
 .resultItem {
   border: 1px solid rgba(226, 232, 240, 0.9);
   border-radius: 16px;
@@ -511,4 +521,55 @@
   .plate {
     font-size: 1.2rem;
   }
-} 
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 1.25rem 1rem 2rem;
+  }
+
+  .grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .card {
+    padding: 1.25rem;
+  }
+
+  .snapshotCard {
+    order: 2;
+  }
+
+  .liveCard {
+    order: 1;
+  }
+
+  .videoShell {
+    padding: 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .videoFrame {
+    min-height: 210px;
+    aspect-ratio: 3 / 4;
+  }
+
+  .actions,
+  .liveControls {
+    flex-direction: column;
+  }
+
+  .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .liveCard .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .liveResultList {
+    display: none;
+  }
+}

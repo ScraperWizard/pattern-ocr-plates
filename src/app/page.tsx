@@ -88,7 +88,7 @@ type VisionResponse = {
 
 type ScanResponse = {
   ocr: PlateResponse;
-  vision: VisionResponse;
+  vision: VisionResponse | null;
 };
 
 type CarRecordRaw = {
@@ -234,13 +234,13 @@ export default function Home() {
         body: payload,
       });
 
-      const data = (await response.json()) as { ocr?: PlateResponse; vision?: VisionResponse; error?: string };
+      const data = (await response.json()) as { ocr?: PlateResponse; vision?: VisionResponse | null; error?: string };
 
-      if (!response.ok || !data?.ocr || !data?.vision) {
+      if (!response.ok || !data?.ocr) {
         throw new Error(data?.error ?? "Unable to process the image. Please try again.");
       }
 
-      setScanResult({ ocr: data.ocr, vision: data.vision });
+      setScanResult({ ocr: data.ocr, vision: data.vision ?? null });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error. Please try again.";
       setError(message);

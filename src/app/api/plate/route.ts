@@ -2,14 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 const OCR_API_URL = "https://api.platerecognizer.com/v1/plate-reader/";
 const MODEL_API_URL = "http://46.224.1.73:8000/analyze";
+const OCR_API_KEY = "8ee0d324189b1f227c25d808d93deafeb874dacb";
 
 export async function POST(request: NextRequest) {
-  const ocrKey = process.env.PLATE_RECOGNIZER_API_KEY ?? process.env.CAR_VISION_API_KEY;
-
-  if (!ocrKey) {
-    return NextResponse.json({ error: "Server misconfiguration. Missing Plate OCR API key." }, { status: 500 });
-  }
-
   try {
     const formData = await request.formData();
     const file = formData.get("file");
@@ -33,7 +28,7 @@ export async function POST(request: NextRequest) {
       fetch(OCR_API_URL, {
         method: "POST",
         headers: {
-          Authorization: `Token ${ocrKey}`,
+          Authorization: `Token ${OCR_API_KEY}`,
         },
         body: ocrPayload,
       }),

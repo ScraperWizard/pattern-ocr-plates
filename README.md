@@ -18,14 +18,6 @@ Mobile-first Next.js app that lets you capture or upload a vehicle photo from yo
 
 ## Environment variables
 
-Create a `.env.local` file at the project root:
-
-```
-PLATE_RECOGNIZER_API_KEY=your_token_here
-```
-
-> Use the provided OCR token (`8ee0d324189b1f227c25d808d93deafeb874dacb`) or substitute your own. Never commit this file.
-
 ## Local development
 
 ```bash

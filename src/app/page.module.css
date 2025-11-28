@@ -12,8 +12,8 @@
 
 .grid {
   width: min(1200px, 100%);
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 2rem;
 }
 
@@ -34,12 +34,43 @@
   background: linear-gradient(135deg, #0f172a, #1f2857);
   color: #e2e8f0;
   border: 1px solid rgba(148, 163, 184, 0.25);
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(320px, 1fr);
+  gap: 1.5rem 2rem;
+  align-items: flex-start;
 }
 
 .snapshotCard {
-  display: flex;
-  flex-direction: column;
-  gap: 1.75rem;
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(320px, 1fr);
+  gap: 1.5rem 2rem;
+  align-items: flex-start;
+}
+
+.snapshotCard .header,
+.liveCard .header {
+  grid-column: 1 / -1;
+}
+
+.snapshotCard .form {
+  grid-column: 1 / 2;
+}
+
+.snapshotCard .results {
+  grid-column: 2 / 3;
+  align-self: start;
+}
+
+.liveCard .videoShell,
+.liveCard .devicePicker,
+.liveCard .liveControls {
+  grid-column: 1 / 2;
+}
+
+.liveCard .results {
+  grid-column: 2 / 3;
+  grid-row: 2 / span 3;
+  align-self: start;
 }
 
 .header {
@@ -224,6 +255,27 @@
 
 .liveCard .deviceError {
   color: #fecaca;
+}
+
+@media (max-width: 1024px) {
+
+  .snapshotCard,
+  .liveCard {
+    grid-template-columns: 1fr;
+  }
+
+  .snapshotCard .form,
+  .snapshotCard .results,
+  .liveCard .videoShell,
+  .liveCard .devicePicker,
+  .liveCard .liveControls,
+  .liveCard .results {
+    grid-column: 1 / -1;
+  }
+
+  .liveCard .results {
+    grid-row: auto;
+  }
 }
 
 .primaryButton,

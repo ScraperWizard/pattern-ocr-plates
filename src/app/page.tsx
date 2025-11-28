@@ -495,9 +495,6 @@ export default function Home() {
   const livePlate = topLivePlate?.plate?.toUpperCase() ?? null;
   const liveVisionStatus = liveResult?.visionStatus ?? "error";
   const liveVisionAvailable = liveVisionStatus === "success" && Boolean(liveResult?.vision);
-  const liveMakeDisplay = liveTopMakeLabels.join(" · ") || "—";
-  const liveModelDisplay = liveTopModelLabels.join(" · ") || "—";
-  const liveColorDisplay = liveColorLabel ?? "—";
   const liveVisionErrorMessage = !liveVisionAvailable ? liveResult?.visionError ?? "Vision service unavailable." : null;
 
   type ComplianceState =
@@ -629,6 +626,13 @@ export default function Home() {
     : liveCompliance.status === "mismatch"
     ? styles.auditMismatch
     : styles.auditNeutral;
+  const liveMakeMatchLabel =
+    liveComplianceRecord && liveTopMakeLabels.length > 0 ? liveTopMakeLabels.find((label) => normalizeValue(label) === normalizeValue(liveComplianceRecord.make)) ?? null : null;
+  const liveModelMatchLabel =
+    liveComplianceRecord && liveTopModelLabels.length > 0 ? liveTopModelLabels.find((label) => normalizeValue(label) === normalizeValue(liveComplianceRecord.model)) ?? null : null;
+  const liveMakeDisplayValue = liveComplianceRecord && liveMakeMatchLabel ? liveComplianceRecord.make : liveTopMakeLabels.join(" · ") || "—";
+  const liveModelDisplayValue = liveComplianceRecord && liveModelMatchLabel ? liveComplianceRecord.model : liveTopModelLabels.join(" · ") || "—";
+  const liveColorDisplayValue = liveColorLabel ?? "—";
 
   const renderBoxStyle = (box?: PlateBox) => {
     const imageWidth = liveResult?.ocr?.image_width ?? videoSize.width;
@@ -873,15 +877,15 @@ export default function Home() {
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Make</p>
-                    <p className={styles.summaryValue}>{liveMakeDisplay}</p>
+                    <p className={styles.summaryValue}>{liveMakeDisplayValue}</p>
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Model</p>
-                    <p className={styles.summaryValue}>{liveModelDisplay}</p>
+                    <p className={styles.summaryValue}>{liveModelDisplayValue}</p>
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Color</p>
-                    <p className={styles.summaryValue}>{liveColorDisplay}</p>
+                    <p className={styles.summaryValue}>{liveColorDisplayValue}</p>
                   </div>
                   <div>
                     <p className={styles.summaryLabel}>Confidence</p>

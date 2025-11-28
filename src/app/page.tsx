@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import carDatabase from "@/data/carDb.json";
 import styles from "./page.module.css";
 
@@ -135,6 +135,10 @@ export default function Home() {
   const [isLivePaused, setIsLivePaused] = useState(false);
   const [liveStatus, setLiveStatus] = useState("Camera idle");
   const [videoSize, setVideoSize] = useState({ width: 0, height: 0 });
+  const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [deviceError, setDeviceError] = useState<string | null>(null);
+  const [isRefreshingDevices, setIsRefreshingDevices] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -143,6 +147,40 @@ export default function Home() {
   const isSendingRef = useRef(false);
   const liveReadyRef = useRef(false);
   const livePausedRef = useRef(false);
+
+  const refreshDeviceList = useCallback(async () => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) {
+      setDeviceError("Camera selection is not supported in this browser.");
+      return;
+    }
+
+    try {
+      setIsRefreshingDevices(true);
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter((device) => device.kind === "videoinput");
+      setCameraDevices(videoInputs);
+
+      if (videoInputs.length === 0) {
+        setDeviceError("No camera devices detected.");
+      } else {
+        setDeviceError(null);
+      }
+
+      if (!selectedDeviceId && videoInputs.length > 0) {
+        setSelectedDeviceId(videoInputs[0].deviceId);
+      } else if (selectedDeviceId) {
+        const stillExists = videoInputs.some((device) => device.deviceId === selectedDeviceId);
+        if (!stillExists) {
+          setSelectedDeviceId(videoInputs[0]?.deviceId ?? null);
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to enumerate camera devices.";
+      setDeviceError(message);
+    } finally {
+      setIsRefreshingDevices(false);
+    }
+  }, [selectedDeviceId]);
 
   useEffect(() => {
     return () => {
@@ -192,6 +230,29 @@ export default function Home() {
   useEffect(() => {
     livePausedRef.current = isLivePaused;
   }, [isLivePaused]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices) {
+      setDeviceError("Camera selection is not supported in this environment.");
+      return;
+    }
+
+    void refreshDeviceList();
+
+    const mediaDevices = navigator.mediaDevices;
+    const handleDeviceChange = () => {
+      void refreshDeviceList();
+    };
+
+    if (typeof mediaDevices.addEventListener === "function") {
+      mediaDevices.addEventListener("devicechange", handleDeviceChange);
+      return () => {
+        mediaDevices.removeEventListener("devicechange", handleDeviceChange);
+      };
+    }
+
+    return () => {};
+  }, [refreshDeviceList]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -376,8 +437,10 @@ export default function Home() {
 
     setLiveStatus("Requesting camera access…");
     try {
+      const videoConstraints: MediaTrackConstraints = selectedDeviceId && selectedDeviceId.length > 0 ? { deviceId: { exact: selectedDeviceId } } : { facingMode: { ideal: "environment" } };
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
+        video: videoConstraints,
         audio: false,
       });
 
@@ -400,6 +463,7 @@ export default function Home() {
       setLiveResult(null);
       setLiveStatus("Streaming frames (1 fps)");
       setLiveError(null);
+      void refreshDeviceList();
       startInterval();
       setTimeout(() => {
         void captureFrame();
@@ -448,6 +512,25 @@ export default function Home() {
     setLiveResult(null);
     setLiveStatus("Camera idle");
     setLiveError(null);
+  };
+
+  const handleCameraChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const nextId = event.target.value || null;
+    setSelectedDeviceId(nextId);
+
+    if (isLiveReady) {
+      const resumeAfterSwitch = !isLivePaused;
+      stopLiveCamera();
+      if (resumeAfterSwitch) {
+        setTimeout(() => {
+          void startLiveCamera();
+        }, 100);
+      }
+    }
+  };
+
+  const handleRefreshDevices = () => {
+    void refreshDeviceList();
   };
 
   const topResult = useMemo(() => scanResult?.ocr?.results?.[0], [scanResult]);
@@ -847,6 +930,24 @@ export default function Home() {
             </div>
             <p className={styles.liveStatus}>{liveStatus}</p>
             {liveError && <p className={styles.liveError}>{liveError}</p>}
+          </div>
+
+          <div className={styles.devicePicker}>
+            <label htmlFor="camera-select">Camera device</label>
+            <div className={styles.devicePickerRow}>
+              <select id="camera-select" className={styles.deviceSelect} value={selectedDeviceId ?? ""} onChange={handleCameraChange} disabled={cameraDevices.length === 0}>
+                {cameraDevices.length === 0 && <option value="">No cameras detected</option>}
+                {cameraDevices.map((device, index) => (
+                  <option key={device.deviceId || `camera-${index}`} value={device.deviceId}>
+                    {device.label || `Camera ${index + 1}`}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className={styles.refreshButton} onClick={handleRefreshDevices} disabled={isRefreshingDevices}>
+                {isRefreshingDevices ? "Refreshing…" : "Refresh"}
+              </button>
+            </div>
+            {deviceError && <small className={styles.deviceError}>{deviceError}</small>}
           </div>
 
           <div className={styles.liveControls}>

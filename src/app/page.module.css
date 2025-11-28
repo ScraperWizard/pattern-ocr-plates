@@ -144,6 +144,88 @@
   gap: 0.75rem;
 }
 
+.devicePicker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 1rem;
+}
+
+.devicePicker label {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.liveCard .devicePicker label {
+  color: #e0e7ff;
+}
+
+.devicePickerRow {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.deviceSelect {
+  flex: 1;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: #fff;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.liveCard .deviceSelect {
+  background: rgba(15, 23, 42, 0.65);
+  color: #e2e8f0;
+  border-color: rgba(226, 232, 240, 0.3);
+}
+
+.deviceSelect:disabled {
+  opacity: 0.6;
+}
+
+.refreshButton {
+  border-radius: 12px;
+  padding: 0.65rem 1.2rem;
+  font-weight: 600;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  background: transparent;
+  color: #312e81;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.refreshButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.refreshButton:not(:disabled):hover {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.liveCard .refreshButton {
+  border-color: rgba(226, 232, 240, 0.4);
+  color: #e0e7ff;
+}
+
+.liveCard .refreshButton:not(:disabled):hover {
+  background: rgba(226, 232, 240, 0.12);
+}
+
+.deviceError {
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+.liveCard .deviceError {
+  color: #fecaca;
+}
+
 .primaryButton,
 .secondaryButton,
 .ghostButton {
@@ -571,5 +653,15 @@
 
   .liveResultList {
     display: none;
+  }
+
+  .devicePickerRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .refreshButton {
+    width: 100%;
+    text-align: center;
   }
 }

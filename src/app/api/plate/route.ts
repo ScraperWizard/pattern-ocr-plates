@@ -57,8 +57,7 @@ export async function POST(request: NextRequest) {
       console.error("Failed to reach vision model", visionErr);
     }
 
-    const shouldCallOcr =
-      visionStatus === "success" && visionData?.detection?.status?.toLowerCase?.() === "detected";
+    const shouldCallOcr = visionStatus === "success" && visionData?.detection?.status?.toLowerCase?.() === "detected";
 
     let ocrData: unknown = { results: [] };
     let ocrStatus: "success" | "skipped" = "skipped";
@@ -90,10 +89,7 @@ export async function POST(request: NextRequest) {
       ocrData = maybeOcr;
       ocrStatus = "success";
     } else {
-      ocrSkipReason =
-        visionStatus === "success"
-          ? "Vehicle not detected, OCR skipped."
-          : visionError ?? "Vision model unavailable, OCR skipped.";
+      ocrSkipReason = visionStatus === "success" ? "Vehicle not detected, OCR skipped." : visionError ?? "Vision model unavailable, OCR skipped.";
     }
 
     return NextResponse.json({
